@@ -18,26 +18,33 @@ join track t on t.album_id = a.album_id
 group by a.album_id  
 
 --все исполнители, которые не выпустили альбомы в 2020 году;
-select a.nickname 
-from author a 
-join album_author aa on a.author_id = aa.author_id
-join album a2 on a2.album_id = aa.album_id 
-where a2.create_date != 2020
-
---названия сборников, в которых присутствует конкретный исполнитель (выберите сами);
-select p.playlist_name, a2.author_name 
+select a2.nickname 
 from (
-	select t.track_id, aa.author_id  
-	from album a
+	select aa.author_id
+	from album_author aa 
+	except
+	select aa.author_id 
+	from album a 
 	join album_author aa on aa.album_id = a.album_id 
-	join track t ON t.album_id = a.album_id 
-	where aa.author_id = 2) t
-join track_playlist tp on tp.track_id = t.track_id
-join playlist p on tp.list_id = p.list_id 
+	where a.create_date = 2020) t
 join author a2 on a2.author_id = t.author_id
 
 
+--названия сборников, в которых присутствует конкретный исполнитель (выберите сами);
+
+select p.playlist_name, a2.author_name 
+from playlist p 
+join track_playlist tp on tp.list_id  = p.list_id 
+join track t on t.track_id = tp.track_id 
+join album a on a.album_id = t.album_id 
+join album_author aa on aa.album_id = a.album_id 
+join author a2 on a2.author_id = aa.author_id 
+where a2.author_id = 2
+
+
 --название альбомов, в которых присутствуют исполнители более 1 жанра;
+--при вложенном запросе цена выполнения запроса намного ниже
+--explain analyze  -- cost 99.71
 select a2.album_name
 from (
 	select a.author_id  
@@ -48,6 +55,14 @@ from (
 join album_author aa on aa.author_id = t.author_id
 join album a2 on a2.album_id = aa.album_id 
 
+--explain analyze -- cost 1964.71
+select a.album_name
+from album a 
+join album_author aa on aa.album_id = a.album_id 
+join author a2 on a2.author_id = aa.author_id 
+join author_genre ag on ag.author_id = a2.author_id 
+group by ag.author_id, a.album_id 
+having count(ag.genre_id) > 1 
 
 --наименование треков, которые не входят в сборники;
 select t.track_name 
@@ -59,14 +74,14 @@ where tp.list_id is null
 
 --исполнителя(-ей), написавшего самый короткий по продолжительности трек (теоретически таких треков может быть несколько);
 --в результате два исполнителя, поскольку они являяются авторами одного альбоома с данным треком
-select a2.*
-from (
-	select t.track_id, t.duration, t.album_id, row_number() over(order by t.duration) as identy
-	from track t) t
-join album a on a.album_id = t.album_id
-join album_author aa on aa.album_id = a.album_id 
-join author a2 on a2.author_id = aa.author_id 
-where t.identy = 1
+
+select a.author_name 
+from album_author aa 
+join author a on a.author_id = aa.author_id 
+join album a2 on a2.album_id = aa.album_id 
+join track t on t.album_id = a2.album_id
+where t.duration = (select min(t2.duration) from track t2)
+
 
 --название альбомов, содержащих наименьшее количество треков.
 --т.к. альбомов может быть несколько
